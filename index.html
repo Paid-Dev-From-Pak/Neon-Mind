@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neon Memory Grid - Modes</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+*{box-sizing:border-box;}
+html,body{
+  margin:0; padding:0; height:100%; width:100%;
+  font-family:'Orbitron',sans-serif;
+  background:#0d0d0d; display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+  color:#00ffcc; overflow-x:hidden;
+}
+#header{
+  width:90%; max-width:600px; display:flex; justify-content:space-between; margin:10px 0;
+  font-size:4vw; text-shadow:0 0 15px #00ffcc;
+}
+#modes{
+  margin-bottom:10px; display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
+}
+button.mode{
+  margin:5px; padding:5px 10px; font-size:3vw; border-radius:5px;
+  border:none; cursor:pointer; background:#00ffcc; color:#111; box-shadow:0 0 10px #00ffcc;
+}
+button.mode:hover{ background:#00ffaa; }
+#currentMode{ margin-left:10px; font-size:3vw; text-shadow:0 0 10px #00ffcc; }
+#grid{
+  display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(4,1fr);
+  gap:2vw; width:90vw; max-width:600px; aspect-ratio:1/1; margin-bottom:20px;
+}
+.tile{
+  background:#111; border-radius:10%; box-shadow:0 0 8px #00ffcc;
+  cursor:pointer; transition: all 0.3s;
+}
+.tile.active{ box-shadow:0 0 25px #00ffcc; }
+#buttonsContainer{
+  display:flex; justify-content:center; margin-bottom:20px; flex-wrap:wrap;
+}
+#start, #restart{
+  margin:5px; padding:8px 15px; font-size:4vw; border-radius:5px; border:none;
+  cursor:pointer; background:#00ffcc; color:#111; box-shadow:0 0 10px #00ffcc;
+}
+#start:hover, #restart:hover{ background:#00ffaa; }
+@media (max-width:600px){
+  #header{ font-size:5vw; }
+  button.mode, #start, #restart{ font-size:5vw; padding:3vw 5vw; }
+  #grid{gap:3vw;}
+  #currentMode{ font-size:4vw; }
+}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="score">Score: 0</div>
+  <div id="lives">Lives: 3</div>
+</div>
+
+<div id="modes">
+  <button class="mode" data-mode="easy">Easy</button>
+  <button class="mode" data-mode="medium">Medium</button>
+  <button class="mode" data-mode="hard">Hard</button>
+  <span id="currentMode">Mode: Easy</span>
+</div>
+
+<div id="grid"></div>
+
+<div id="buttonsContainer">
+  <button id="start">Start Game</button>
+  <button id="restart">Restart</button>
+</div>
+
+<script>
+// Audio - ting sound
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playTing(){
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.type='sine'; osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+}
+
+// Variables
+const grid=document.getElementById('grid');
+const scoreDisplay=document.getElementById('score');
+const livesDisplay=document.getElementById('lives');
+const restartBtn=document.getElementById('restart');
+const startBtn=document.getElementById('start');
+const modeButtons=document.querySelectorAll('.mode');
+const currentModeDisplay=document.getElementById('currentMode');
+
+let tiles=[], pattern=[], playerPattern=[], level=1, score=0, lives=3, canClick=false, gameStarted=false;
+let colors=['#00ffcc','#ff00ff','#ffff00','#00ffff','#ff6600','#ff0066'];
+let mode='easy', speed=800, startLength=4, maxLives=3;
+
+// Track last wrong click to give bonus life
+let mistakeHappened=false;
+
+// Create tiles
+for(let i=0;i<16;i++){
+  let tile=document.createElement('div');
+  tile.classList.add('tile'); tile.dataset.index=i;
+  grid.appendChild(tile); tiles.push(tile);
+  tile.addEventListener('click',()=>handleClick(i));
+}
+
+// Mode setup
+modeButtons.forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    mode=btn.dataset.mode;
+    if(mode==='easy'){speed=800; startLength=4;}
+    else if(mode==='medium'){speed=600; startLength=5;}
+    else{speed=400; startLength=6;}
+    currentModeDisplay.innerText="Mode: "+mode.charAt(0).toUpperCase()+mode.slice(1);
+    resetGame();
+  });
+});
+
+// Reset tiles
+function resetTiles(){
+  tiles.forEach(tile=>{
+    tile.style.background="#111";
+    tile.classList.remove('active');
+  });
+}
+
+// Generate pattern
+function generatePattern(){
+  pattern.push(Math.floor(Math.random()*16));
+  playPattern();
+}
+
+// Play pattern
+function playPattern(){
+  canClick=false; let delay=0;
+  const color=colors[level%colors.length];
+  pattern.forEach(index=>{
+    setTimeout(()=>{
+      tiles[index].style.background=color;
+      tiles[index].classList.add('active');
+      setTimeout(()=>tiles[index].classList.remove('active'),speed/2);
+    },delay);
+    delay+=speed + 200;
+  });
+  setTimeout(()=>{canClick=true; playerPattern=[]; mistakeHappened=false;}, delay);
+}
+
+// Particle effect
+function createParticle(x,y,color){
+  const p=document.createElement('div');
+  p.classList.add('particle'); p.style.left=x+'px'; p.style.top=y+'px';
+  p.style.width=p.style.height='8px'; p.style.background=color;
+  document.body.appendChild(p);
+  const dx=(Math.random()-0.5)*50, dy=(Math.random()-0.5)*50;
+  let opacity=1;
+  const anim=setInterval(()=>{
+    p.style.left=(parseFloat(p.style.left)+dx*0.05)+'px';
+    p.style.top=(parseFloat(p.style.top)+dy*0.05)+'px';
+    opacity-=0.03;
+    p.style.opacity=opacity;
+    if(opacity<=0){ clearInterval(anim); p.remove(); }
+  },16);
+}
+
+// Handle tile clicks with life bonus
+function handleClick(index){
+  if(!canClick) return;
+  const rect=tiles[index].getBoundingClientRect();
+  createParticle(rect.left+rect.width/2, rect.top+rect.height/2, colors[level%colors.length]);
+  playTing();
+
+  playerPattern.push(index);
+  tiles[index].classList.add('active');
+  setTimeout(()=>tiles[index].classList.remove('active'),300);
+  let currentIndex=playerPattern.length-1;
+
+  if(playerPattern[currentIndex]!==pattern[currentIndex]){
+    lives--; if(lives<0) lives=0;
+    livesDisplay.innerText="Lives: "+lives;
+    playerPattern=[];
+    mistakeHappened=true;
+    if(lives<=0){ alert("Game Over! Score: "+score); resetGame(); return; }
+    else { setTimeout(playPattern,500); return; }
+  } else {
+    // If previous mistake happened and correct click now → add 1 life
+    if(mistakeHappened && lives<maxLives){
+      lives++; livesDisplay.innerText="Lives: "+lives;
+      mistakeHappened=false;
+    }
+  }
+
+  if(playerPattern.length===pattern.length){
+    score+=level*10; scoreDisplay.innerText="Score: "+score; level++; generatePattern();
+  }
+}
+
+// Reset game
+function resetGame(){
+  resetTiles();
+  pattern=[]; playerPattern=[]; level=1; score=0; lives=maxLives;
+  scoreDisplay.innerText="Score: "+score; livesDisplay.innerText="Lives: "+lives;
+  canClick=false; gameStarted=false; mistakeHappened=false;
+  startBtn.disabled=false;
+}
+
+// Start button
+startBtn.addEventListener('click',()=>{
+  if(!gameStarted){
+    gameStarted=true; startBtn.disabled=true;
+    pattern=[]; playerPattern=[]; level=1; score=0; lives=maxLives;
+    scoreDisplay.innerText="Score: "+score; livesDisplay.innerText="Lives: "+lives;
+    for(let i=0;i<startLength;i++) pattern.push(Math.floor(Math.random()*16));
+    playPattern();
+  }
+});
+
+restartBtn.addEventListener('click',resetGame);
+</script>
+</body>
+</html>
